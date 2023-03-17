@@ -641,7 +641,8 @@ int LogNormalPosterior::log_posterior_predictive(const size_t M,
 	                                         l1_max, lX);
 
 	/* Evaluate posterior: */
-	const double lga = std::lgamma(0.5 * N - 0.5);
+	const long double dlga = math<long double>::lgamma(0.5 * (N + 1.0) - 0.5)
+	                       - math<long double>::lgamma(0.5 * N - 0.5);
 	#pragma omp parallel for firstprivate(lX_xi)
 	for (size_t i=0; i<M; ++i){
 		const double xi = x[i];
@@ -656,8 +657,7 @@ int LogNormalPosterior::log_posterior_predictive(const size_t M,
 			const long double lI_xi 
 			   = compute_log_integral_I<long double>(l0_min, l0_max, l1_min,
 			                                         l1_max, lX_xi);
-			//log_post_pred[i] = -ln_sqrt_2pi - lxi + lgai - lga - N * math<long double>::log(l1i)
-			//              - C1 / (l1i * l1i);
+			log_post_pred[i] = -ln_sqrt_2pi - lxi + dlga + lI_xi - lI;
 		}
 	}
 	return 0;
