@@ -1,0 +1,18 @@
+[build-system]
+requires = ["setuptools>=61", "wheel", "cython"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "pybalonor"
+version = "0.1.0"
+authors = [
+    {name = "Malte J. Ziebarth", email = "mjz.science@fmvkb.de"},
+]
+description = "Bayesian analysis of the log-normal distribution."
+dependencies = [
+    "numpy",
+    "cython"
+]
+
+[tool.setuptools]
+packages = ["pybalonor"]

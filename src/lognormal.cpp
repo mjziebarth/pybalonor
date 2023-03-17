@@ -137,7 +137,7 @@ real compute_log_integral_I(real a, real b, real c, real d,
                             const std::vector<double>& lx)
 {
 	real alpha = 0.5 * lx.size() - 0.5;
-	
+
 	/* This scale will be used to keep the integrand in a numerically
 	 * feasible range:
 	 */
@@ -159,7 +159,7 @@ real compute_log_integral_I(real a, real b, real c, real d,
 				real log_integrand = -alpha * math<real>::log(C1);
 				return log_integrand;
 			};
-			
+
 			lognormal_params_t<real> p(log_normal_mle<real>(lx));
 			l0_mle = p.l0;
 			if (l0_mle < a || l0_mle > b)
@@ -231,7 +231,7 @@ real compute_log_integral_I(real a, real b, real c, real d,
 		else {
 			I = integrator.integrate(integrand, a, b);
 		}
-	
+
 	} else if (std::isinf(d)) {
 		/*
 		 * Infinite interval with c > 0.
@@ -249,7 +249,7 @@ real compute_log_integral_I(real a, real b, real c, real d,
 				    + math<real>::log(boost::math::gamma_p(alpha, C1/c2));
 				return log_integrand;
 			};
-			
+
 			lognormal_params_t<real> p(log_normal_mle<real>(lx));
 			l0_mle = p.l0;
 			if (l0_mle < a || l0_mle > b)
@@ -296,7 +296,7 @@ real compute_log_integral_I(real a, real b, real c, real d,
 					+ log_delta_gamma_div_loggamma(alpha, C1/c2, C1/d2);
 				return log_integrand;
 			};
-			
+
 			lognormal_params_t<real> p(log_normal_mle<real>(lx));
 			l0_mle = p.l0;
 			if (l0_mle < a || l0_mle > b)
@@ -649,15 +649,19 @@ int LogNormalPosterior::log_posterior_predictive(const size_t M,
 		if (xi <= 0.0)
 			log_post_pred[i] = -std::numeric_limits<double>::infinity();
 		else {
-			/* Create the joint set of lX and the logarithm of the
-			 * evaluation point: */
-			const double lxi = std::log(xi);
-			lX_xi.back() = lxi;
+			try {
+				/* Create the joint set of lX and the logarithm of the
+				 * evaluation point: */
+				const double lxi = std::log(xi);
+				lX_xi.back() = lxi;
 
-			const long double lI_xi 
-			   = compute_log_integral_I<long double>(l0_min, l0_max, l1_min,
-			                                         l1_max, lX_xi);
-			log_post_pred[i] = -ln_sqrt_2pi - lxi + dlga + lI_xi - lI;
+				const long double lI_xi
+				   = compute_log_integral_I<long double>(l0_min, l0_max, l1_min,
+				                                         l1_max, lX_xi);
+				log_post_pred[i] = -ln_sqrt_2pi - lxi + dlga + lI_xi - lI;
+			} catch (...) {
+				log_post_pred[i] = std::numeric_limits<double>::quiet_NaN();
+			}
 		}
 	}
 	return 0;
