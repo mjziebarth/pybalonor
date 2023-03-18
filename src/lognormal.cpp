@@ -10,6 +10,7 @@
 #define BOOST_ENABLE_ASSERT_HANDLER
 #include <boost/math/special_functions/gamma.hpp>
 #include <boost/math/quadrature/tanh_sinh.hpp>
+#include <boost/math/quadrature/exp_sinh.hpp>
 #include <boost/math/tools/roots.hpp>
 #include <boost/math/tools/minima.hpp>
 
@@ -32,6 +33,7 @@ void boost::assertion_failed(char const* expr, char const* function,
 
 
 using boost::math::quadrature::tanh_sinh;
+using boost::math::quadrature::exp_sinh;
 using boost::math::tools::toms748_solve;
 using boost::math::tools::bracket_and_solve_root;
 using boost::math::tools::brent_find_minima;
@@ -414,45 +416,167 @@ int LogNormalPosterior::posterior(const size_t M, const double* l0,
 	return 0;
 }
 
+/*
+ * This function evaluates the posterior of the mean for one particular
+ * value of the mean.
+ */
+template<typename real>
+real log_mean_posterior_eval(const real mu_i, const std::vector<double>& lX,
+                             const real lx_sum,
+                             const real l0_min, const real l0_max,
+                             const real l1_min, const real l1_max,
+                             const real log_norm
+                          )
+{
+	typedef math<real> mth;
+	const size_t N = lX.size();
 
-//template<typename fun_t, typename T>
-//T find_maximum(fun_t fun, T xmin, T xmax)
-//{
-////	constexpr double tol = std::sqrt(std::numeric_limits<T>::epsilon());
-//	constexpr int bits = std::numeric_limits<T>::digits;
-//	T fun_xmax, fun_xmin;
-//	if (std::isinf(xmax)){
-//		std::array<T,3> xprev;
-//		std::array<T,3> fprev;
-//		xprev[0] = xmin;
-//		fprev[0] = fun(xmin);
-//		xprev[1] = xmin;
-//		fprev[1] = fun(xmin);
-//		xprev[2] = (xmin == 0) ? 1.0 : 2 * xmin;
-//		fprev[2] = fun(xprev[2]);
-//		while (fprev[2] > fprev[1]){
-//			xprev[0] = xprev[1];
-//			fprev[0] = fprev[1];
-//			xprev[1] = xprev[2];
-//			fprev[1] = fprev[2];
-//			xprev[2] *= 2;
-//			fprev[2] = fun(xprev[2]);
-//		}
-//		xmin = xprev[0];
-//		xmax = xprev[2];
-//		fun_xmin = fprev[0];
-//		fun_xmax = fprev[2];
-//	} else {
-//		fun_xmax = fun(xmax);
-//		fun_xmin = fun(xmin);
-//	}
-//	std::cout << "xmin = " << xmin << "\n"
-//	          << "xmax = " << xmax << "\n" << std::flush;
-//	std::cout << std::setprecision(20);
-//	std::pair<T,T> res
-//	   = brent_find_minima([&](T x) -> T {return -fun(x);}, xmin, xmax, bits);
-//	return res.first;
-//}
+	const real ln_mu = mth::log(mu_i);
+	if (ln_mu <= l0_min){
+		return -std::numeric_limits<real>::infinity();
+	}
+
+	const real dstar = std::min(mth::sqrt(2.0 * (ln_mu - l0_min)), l1_max);
+	if (dstar <= l1_min){
+		return -std::numeric_limits<real>::infinity();
+	}
+
+	/*
+	 * Compute the maximum of the integrand:
+	 */
+	real log_scale = 0.0;
+	real l1_peak = 0.0;
+	bool max_at_boundary = false;
+	{
+		auto log_integrand = [&](real l1) -> real {
+			if (l1 == 0.0)
+				return -std::numeric_limits<real>::infinity();
+			const real dlx = ln_mu - 0.5 * l1 * l1;
+			real S = 0.0;
+			for (double lxi : lX){
+				S += (lxi - dlx) * (lxi - dlx);
+			}
+			return -(N * mth::log(l1)) - 0.5 * S / (l1 * l1);
+		};
+		auto fun0 = [&](real l1) -> real {
+			const real dlx = (ln_mu - 0.5 * l1 * l1);
+			real S = 0.0;
+			for (double lxi : lX){
+				S += (lxi - dlx) * (lxi - dlx);
+			}
+			return N * (ln_mu - 1.0) - 0.5 * N * l1 * l1 - lx_sum
+			       + S / (l1 * l1);
+		};
+		if ((fun0(l1_min) > 0) == (fun0(dstar) > 0)){
+			/* No change in sign -> maximum at the boundary */
+			const real li_l = log_integrand(l1_min);
+			const real li_r = log_integrand(dstar);
+			max_at_boundary = true;
+			log_scale = std::max(li_l, li_r);
+		} else {
+			/*
+			 * Use Newton-Raphson to compute the maximum of the
+			 * log integrand.
+			 */
+			auto fun1 = [&](real l1) -> real {
+				const real dlx = (ln_mu - 0.5 * l1 * l1);
+				real S0 = 0.0;
+				real S1 = 0.0;
+				for (double lxi : lX){
+					real di = (lxi - dlx) / l1;
+					S0 += di * di;
+					S1 += di;
+				}
+				return -(N * l1) - 2 * S0 / l1  + 2 * S1;
+			};
+			/* Initial guess: */
+			if (2.0 * ln_mu - 2.0/N * lx_sum < 0.0)
+				l1_peak = l1_min + 0.5 * (dstar - l1_min);
+			else
+				l1_peak = std::max(std::min(
+				             mth::sqrt(2 * ln_mu - 2.0/N * lx_sum),
+				             dstar), l1_min);
+			const real tol
+			  = mth::sqrt(std::numeric_limits<real>::epsilon());
+			for (size_t j=0; j<100; ++j){
+				real dl1 = - fun0(l1_peak) / fun1(l1_peak);
+				dl1 = std::min(std::max(dl1, -0.9 * (l1_peak - l1_min)),
+				               0.9 * (dstar - l1_peak));
+				l1_peak += dl1;
+				if (std::abs(dl1) < tol * l1_peak)
+					break;
+			}
+			log_scale = log_integrand(l1_peak);
+		}
+	}
+	/* Now integrate: */
+	auto integrand = [&](real l1) -> real {
+		if (l1 == 0.0)
+			return 0.0;
+		const real dlx = ln_mu - 0.5 * l1 * l1;
+		real S = 0.0;
+		for (double lxi : lX){
+			S += (lxi - dlx) * (lxi - dlx);
+		}
+		real log = -(N * mth::log(l1)) - 0.5 * S / (l1 * l1);
+		return mth::exp(log - log_scale);
+	};
+	tanh_sinh<real> integrator;
+	real I_l1 = 0.0;
+	/* On numerical difficulties, return NaN: */
+	try {
+		if (max_at_boundary){
+			I_l1 = integrator.integrate(integrand, l1_min, dstar);
+		} else {
+			I_l1 =   integrator.integrate(integrand, l1_min, l1_peak)
+				   + integrator.integrate(integrand, l1_peak, dstar);
+		}
+		return mth::log(2.0) - log_norm + mth::log(I_l1) + log_scale;
+	} catch (...) {
+		std::cout << "quiet_NaN\n";
+		return std::numeric_limits<double>::quiet_NaN();
+	}
+}
+
+template<typename real>
+std::pair<real,real>
+maximum_posterior_mu(const std::vector<double>& lX, const real lx_sum,
+                     const real x_sum, const real l0_min, const real l0_max,
+                     const real l1_min, const real l1_max)
+{
+	/*
+	 * This function aims to find the maximum of the posterior in mu.
+	 * It assumes that there is exactly one maximum.
+	 */
+	const size_t N = lX.size();
+
+	auto fun = [&](real mu) -> real {
+		return -log_mean_posterior_eval<real>(mu, lX, lx_sum, l0_min, l0_max,
+		                                      l1_min, l1_max, 0);
+	};
+
+	/* Evaluate the posterior at the mean: */
+	const real mu0 = x_sum / N;
+	const real y_mu0 = -fun(mu0);
+
+	/* Try to find the mu at which the posterior has fallen significantly: */
+	real mu_r = 10.0 * mu0;
+	while (-fun(mu_r) > y_mu0 - 20.0)
+	{
+		mu_r *= 10.0;
+	}
+
+	/* Within the bracket [0, mu_r], find the maximum: */
+	constexpr int bits = std::numeric_limits<real>::digits;
+	std::uintmax_t max_iter = 50;
+	std::pair<real,real>
+	   maxpost = brent_find_minima(fun, static_cast<real>(0.0), mu_r, bits,
+	                               max_iter);
+
+	/* Return the log of the posterior: */
+	maxpost.second = -maxpost.second;
+	return maxpost;
+}
 
 
 int LogNormalPosterior::log_mean_posterior(const size_t M, const double* mu,
@@ -467,137 +591,68 @@ int LogNormalPosterior::log_mean_posterior(const size_t M, const double* mu,
 	sanity_check(l0_min, l0_max, l1_min, l1_max);
 	if (l0_min == l0_max){
 		/* This is the case of known l0. Not implemented. */
-		return -1;
+		throw std::runtime_error("Known l0 (l0_min == l0_max) not "
+		                         "implemented.");
 	}
 	if (l1_min == l1_max){
 		/* This is the case of known l1. Not implemented. */
+		throw std::runtime_error("Known l1 (l1_min == l1_max) not "
+		                         "implemented.");
 		return -1;
 	}
 
 	/* Logarithm of the data: */
 	std::vector<double> lX(N);
 	long double lx_sum = 0.0;
+	long double x_sum = 0.0;
 	for (size_t i=0; i<N; ++i){
+		x_sum += X[i];
 		lX[i] = std::log(X[i]);
 		lx_sum += lX[i];
 	}
 
-	/* Normalization constant: */
-	constexpr long double ln2 = std::log((long double)2.0);
-	const long double lI
-	   = compute_log_integral_I<long double>(l0_min, l0_max, l1_min,
-	                                         l1_max, lX);
+	/* Compute the normalization constant.
+	 * First determine the maximum mu:
+	 */
+	std::pair<long double, long double>
+	   mu_lp_max = maximum_posterior_mu<long double>(lX, lx_sum, x_sum, l0_min,
+	                                                 l0_max, l1_min, l1_max);
+	const long double mu_max = mu_lp_max.first;
+	const long double log_posterior_max = mu_lp_max.second;
 
-	/* Evaluate posterior: */
-	const double lga = std::lgamma(0.5 * N - 0.5);
-	//#pragma omp parallel for
+	/* Now integrate to compute : */
+	tanh_sinh<long double> ts_integrator;
+	exp_sinh<long double> es_integrator;
+	const long double norm
+	   = ts_integrator.integrate(
+	         [&](long double mu) -> long double
+	         {
+	              return mth::exp(log_mean_posterior_eval<long double>(mu, lX,
+	                              lx_sum, l0_min, l0_max, l1_min, l1_max,
+	                              log_posterior_max));
+	         },
+	         (long double)0.0, mu_max)
+	   + es_integrator.integrate(
+	         [&](long double mu_shifted) -> long double
+	         {
+	              return mth::exp(log_mean_posterior_eval<long double>(
+	                              mu_shifted+mu_max, lX, lx_sum,
+	                              l0_min, l0_max, l1_min, l1_max,
+	                              log_posterior_max));
+	         }
+	     );
+	const long double log_norm = mth::log(norm) + log_posterior_max;
+
+
+	/* Now evaluate posterior: */
+	#pragma omp parallel for
 	for (size_t i=0; i<M; ++i){
-		const double mu_i = mu[i];
-		const double ln_mu = std::log(mu_i);
-		if (ln_mu <= l0_min){
-			log_posterior[i] = -std::numeric_limits<double>::infinity();
-			continue;
-		}
-		const long double dstar
-		   = std::min(mth::sqrt(2.0 * (ln_mu - l0_min)), (long double)l1_max);
-		if (dstar <= l1_min){
-			log_posterior[i] = -std::numeric_limits<double>::infinity();
-			continue;
-		}
-		/*
-		 * Compute the maximum of the integrand:
-		 */
-		long double log_scale = 0.0;
-		long double l1_peak = 0.0;
-		bool max_at_boundary = false;
-		{
-			auto log_integrand = [&](long double l1) -> long double {
-				if (l1 == 0.0)
-					return -std::numeric_limits<long double>::infinity();
-				const long double dlx = ln_mu - 0.5 * l1 * l1;
-				long double S = 0.0;
-				for (double lxi : lX){
-					S += (lxi - dlx) * (lxi - dlx);
-				}
-				return -(N * mth::log(l1)) - 0.5 * S / (l1 * l1);
-			};
-			auto fun0 = [&](long double l1) -> long double {
-				const long double dlx = (ln_mu - 0.5 * l1 * l1);
-				long double S = 0.0;
-				for (double lxi : lX){
-					S += (lxi - dlx) * (lxi - dlx);
-				}
-				return N * (ln_mu - 1.0) - 0.5 * N * l1 * l1 - lx_sum
-				       + S / (l1 * l1);
-			};
-			if ((fun0(l1_min) > 0) == (fun0(dstar) > 0)){
-				/* No change in sign -> maximum at the boundary */
-				const long double li_l = log_integrand(l1_min);
-				const long double li_r = log_integrand(dstar);
-				max_at_boundary = true;
-				log_scale = std::max(li_l, li_r);
-			} else {
-				/*
-				 * Use Newton-Raphson to compute the maximum of the
-				 * log integrand.
-				 */
-				auto fun1 = [&](long double l1) -> long double {
-					const long double dlx = (ln_mu - 0.5 * l1 * l1);
-					long double S0 = 0.0;
-					long double S1 = 0.0;
-					for (double lxi : lX){
-						long double di = (lxi - dlx) / l1;
-						S0 += di * di;
-						S1 += di;
-					}
-					return -(N * l1) - 2 * S0 / l1  + 2 * S1;
-				};
-				/* Initial guess: */
-				if (2.0 * ln_mu - 2.0/N * lx_sum < 0.0)
-					l1_peak = l1_min + 0.5 * (dstar - l1_min);
-				else
-					l1_peak = std::max(std::min(
-					             mth::sqrt(2 * ln_mu - 2.0/N * lx_sum),
-					             dstar), (long double)l1_min);
-				const long double tol
-				  = mth::sqrt(std::numeric_limits<long double>::epsilon());
-				for (size_t j=0; j<100; ++j){
-					long double dl1 = - fun0(l1_peak) / fun1(l1_peak);
-					dl1 = std::min(std::max(dl1, -0.9 * (l1_peak - l1_min)),
-					               0.9 * (dstar - l1_peak));
-					l1_peak += dl1;
-					if (std::abs(dl1) < tol * l1_peak)
-						break;
-				}
-				log_scale = log_integrand(l1_peak);
-			}
-		}
-		/* Now integrate: */
-		auto integrand = [&](long double l1) -> long double {
-			if (l1 == 0.0)
-				return 0.0;
-			const long double dlx = ln_mu - 0.5 * l1 * l1;
-			long double S = 0.0;
-			for (double lxi : lX){
-				S += (lxi - dlx) * (lxi - dlx);
-			}
-			long double log = -(N * mth::log(l1)) - 0.5 * S / (l1 * l1);
-			return mth::exp(log - log_scale);
-		};
-		tanh_sinh<long double> integrator;
-		long double I_l1 = 0.0;
-		try {
-			if (max_at_boundary){
-				I_l1 = integrator.integrate(integrand, l1_min, dstar);
-			} else {
-				I_l1 =   integrator.integrate(integrand, l1_min, l1_peak)
-					   + integrator.integrate(integrand, l1_peak, dstar);
-			}
-			log_posterior[i] = ln2 - lI - lga + mth::log(I_l1) + log_scale;
-		} catch (...) {
-			log_posterior[i] = std::numeric_limits<double>::quiet_NaN();
-		}
+		log_posterior[i]
+		   = log_mean_posterior_eval<long double>(mu[i], lX, lx_sum, l0_min,
+		                                          l0_max, l1_min, l1_max,
+		                                          log_norm);
 	}
+
 	return 0;
 
 }
