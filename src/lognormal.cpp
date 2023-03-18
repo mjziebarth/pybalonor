@@ -314,12 +314,8 @@ real compute_log_integral_I(real a, real b, real c, real d,
 				C1 += dlx * dlx;
 			}
 			C1 *= 0.5;
-			std::cout << "l0 = " << l0 << "\n";
-			std::cout << "   C1 = " << C1 << "\n";
 			real log_integrand = -alpha * math<real>::log(C1)
 			    + log_delta_gamma_div_loggamma(alpha, C1/c2, C1/d2);
-			std::cout << "   log_integrand = " << log_integrand << "\n" << std::flush;
-			std::cout << "   scaled =        " << log_integrand - log_scale << "\n";
 			return math<real>::exp(log_integrand - log_scale);
 		};
 
