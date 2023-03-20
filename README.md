@@ -26,11 +26,20 @@ pip install --user .
 ```
 
 ## Usage
-Currently, pybalonor provides three functions:
+Currently, pybalonor provides one class, `CyLogNormalPosterior`:
 ```python
-log_normal_log_posterior(l0, l1, X, l0_min, l0_max, l1_min, l1_max)
-log_normal_log_posterior_predictive(x, X, l0_min, l0_max, l1_min, l1_max)
-log_normal_log_mean_posterior(mu, X, l0_min, l0_max, l1_min, l1_max)
+class CyLogNormalPosterior:
+    def __init__(self, X, l0_min, l0_max, l1_min, l1_max)
+
+    def log_posterior(self, l0, l1)
+
+    def log_posterior_predictive(x)
+
+    def posterior_predictive(x)
+
+    def posterior_predictive_cdf(x)
+
+    def log_mean_posterior(mu)
 ```
 The parameters are as follows:
 | Parameter | Type  | Purpose |

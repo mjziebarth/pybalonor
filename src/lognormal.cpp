@@ -4,13 +4,15 @@
 #include <vector>
 #include <string>
 #include <numbers>
+#include <numeric>
 #include <stdexcept>
 #include <iostream>
 
 #define BOOST_ENABLE_ASSERT_HANDLER
-#include <boost/math/special_functions/gamma.hpp>
 #include <boost/math/quadrature/tanh_sinh.hpp>
 #include <boost/math/quadrature/exp_sinh.hpp>
+#include <boost/math/quadrature/gauss_kronrod.hpp>
+#include <boost/math/special_functions/gamma.hpp>
 #include <boost/math/tools/roots.hpp>
 #include <boost/math/tools/minima.hpp>
 
@@ -34,6 +36,7 @@ void boost::assertion_failed(char const* expr, char const* function,
 
 using boost::math::quadrature::tanh_sinh;
 using boost::math::quadrature::exp_sinh;
+using boost::math::quadrature::gauss_kronrod;
 using boost::math::tools::toms748_solve;
 using boost::math::tools::bracket_and_solve_root;
 using boost::math::tools::brent_find_minima;
@@ -70,7 +73,7 @@ struct lognormal_params_t {
  * log-normal maximum likelihood.
  */
 template<typename real>
-lognormal_params_t<real> log_normal_mle(const std::vector<double>& lX)
+lognormal_params_t<real> log_normal_mle(const std::vector<long double>& lX)
 {
 	lognormal_params_t<real> p({0.0, 0.0});
 	for (double lxi : lX){
@@ -136,7 +139,7 @@ real log_delta_gamma_div_loggamma(real alpha, real x0, real x1)
 
 template<typename real>
 real compute_log_integral_I(real a, real b, real c, real d,
-                            const std::vector<double>& lx)
+                            const std::vector<long double>& lx)
 {
 	real alpha = 0.5 * lx.size() - 0.5;
 
@@ -331,8 +334,9 @@ real compute_log_integral_I(real a, real b, real c, real d,
 	return math<real>::log(I) + log_scale;
 }
 
-static void sanity_check(const double l0_min, const double l0_max,
-                         const double l1_min, const double l1_max)
+LogNormalPosterior::prior_t
+LogNormalPosterior::sanity_check(double l0_min, double l0_max, double l1_min,
+                                 const double l1_max)
 {
 	/* Sanity check: */
 	if (l0_min > l0_max){
@@ -343,44 +347,66 @@ static void sanity_check(const double l0_min, const double l0_max,
 	} else if (l1_min < 0){
 		throw std::runtime_error("l1_min < 0 not allowed.");
 	}
+	return prior_t({.l0_min=l0_min, .l0_max=l0_max, .l1_min=l1_min,
+	                .l1_max=l1_max});
 }
 
-int LogNormalPosterior::log_posterior(const size_t M, const double* l0,
-                             const double* l1, double* log_post,
-                             const size_t N, const double* X,
-                             const double l0_min, const double l0_max,
-                             const double l1_min, const double l1_max)
+static std::vector<long double> compute_lX(const size_t N, const double* X)
+{
+	std::vector<long double> lX(N);
+	for (size_t i=0; i<N; ++i){
+		const double xi = X[i];
+		if (xi <= 0.0)
+			throw std::runtime_error("Encountered x < 0.");
+		lX[i] = math<long double>::log(xi);
+	}
+	return lX;
+}
+
+LogNormalPosterior::LogNormalPosterior(const size_t N, const double* X,
+                       const double l0_min, const double l0_max,
+                       const double l1_min, const double l1_max)
+   : prior(sanity_check(l0_min, l0_max, l1_min, l1_max)),
+     lX(compute_lX(N,X)),
+     x_sum(std::accumulate(X, X+N, 0.0)),
+     lx_sum(std::accumulate(lX.cbegin(), lX.cend(), 0.0)),
+     lga(math<long double>::lgamma(0.5 * N - 0.5))
+{
+}
+
+void LogNormalPosterior::compute_lI() const
+{
+	if (std::isinf(lI) && lI < 0.0)
+		lI = compute_log_integral_I<long double>(prior.l0_min, prior.l0_max,
+		                                         prior.l1_min, prior.l1_max,
+		                                         lX);
+}
+
+void LogNormalPosterior::log_posterior(const size_t M, const double* l0,
+                                       const double* l1, double* log_post) const
 {
 	/* Sanity check: */
-	sanity_check(l0_min, l0_max, l1_min, l1_max);
-	if (l0_min == l0_max){
+	if (prior.l0_min == prior.l0_max){
 		/* This is the case of known l0. Not implemented. */
-		return -1;
+		throw std::logic_error("Known l0 not implemented in log_posterior.");
 	}
-	if (l1_min == l1_max){
+	if (prior.l1_min == prior.l1_max){
 		/* This is the case of known l1. Not implemented. */
-		return -1;
-	}
-
-	/* Logarithm of the data: */
-	std::vector<double> lX(N);
-	for (size_t i=0; i<N; ++i){
-		lX[i] = std::log(X[i]);
+		throw std::logic_error("Known l1 not implemented in log_posterior.");
 	}
 
 	/* Normalization constant: */
 	constexpr long double ln2 = std::log((long double)2.0);
-	const long double lI
-	   = compute_log_integral_I<long double>(l0_min, l0_max, l1_min,
-	                                         l1_max, lX);
+	compute_lI();
 
 	/* Evaluate posterior: */
-	const double lga = std::lgamma(0.5 * N - 0.5);
 	//#pragma omp parallel for
+	const size_t N = lX.size();
 	for (size_t i=0; i<M; ++i){
 		const double l0i = l0[i];
 		const double l1i = l1[i];
-		if (l0i < l0_min || l0i > l0_max || l1i < l1_min || l1i > l1_max)
+		if (l0i < prior.l0_min || l0i > prior.l0_max || l1i < prior.l1_min
+		    || l1i > prior.l1_max)
 			log_post[i] = -std::numeric_limits<double>::infinity();
 		else {
 			long double C1 = 0.0;
@@ -393,23 +419,14 @@ int LogNormalPosterior::log_posterior(const size_t M, const double* l0,
 			              - C1 / (l1i * l1i);
 		}
 	}
-	return 0;
 }
 
-int LogNormalPosterior::posterior(const size_t M, const double* l0,
-                         const double* l1, double* post,
-                         const size_t N, const double* X,
-                         const double l0_min, const double l0_max,
-                         const double l1_min, const double l1_max)
+void LogNormalPosterior::posterior(const size_t M, const double* l0,
+                                   const double* l1, double* post) const
 {
-	int rc = log_posterior(M, l0, l1, post, N, X, l0_min, l0_max, l1_min,
-	                       l1_max);
-	if (rc)
-		return rc;
+	log_posterior(M, l0, l1, post);
 	for (size_t i=0; i<M; ++i)
 		post[i] = std::exp(post[i]);
-
-	return 0;
 }
 
 /*
@@ -417,7 +434,8 @@ int LogNormalPosterior::posterior(const size_t M, const double* l0,
  * value of the mean.
  */
 template<typename real>
-real log_mean_posterior_eval(const real mu_i, const std::vector<double>& lX,
+real log_mean_posterior_eval(const real mu_i,
+                             const std::vector<long double>& lX,
                              const real lx_sum,
                              const real l0_min, const real l0_max,
                              const real l1_min, const real l1_max,
@@ -536,7 +554,7 @@ real log_mean_posterior_eval(const real mu_i, const std::vector<double>& lX,
 
 template<typename real>
 std::pair<real,real>
-maximum_posterior_mu(const std::vector<double>& lX, const real lx_sum,
+maximum_posterior_mu(const std::vector<long double>& lX, const real lx_sum,
                      const real x_sum, const real l0_min, const real l0_max,
                      const real l1_min, const real l1_max)
 {
@@ -575,126 +593,114 @@ maximum_posterior_mu(const std::vector<double>& lX, const real lx_sum,
 }
 
 
-int LogNormalPosterior::log_mean_posterior(const size_t M, const double* mu,
-                          double* log_posterior,
-                          const size_t N, const double* X,
-                          const double l0_min, const double l0_max,
-                          const double l1_min, const double l1_max
-                          )
+void LogNormalPosterior::log_mean_posterior(const size_t M, const double* mu,
+                                            double* log_posterior) const
 {
 	typedef math<long double> mth;
 	/* Sanity check: */
-	sanity_check(l0_min, l0_max, l1_min, l1_max);
-	if (l0_min == l0_max){
+	if (prior.l0_min == prior.l0_max){
 		/* This is the case of known l0. Not implemented. */
-		throw std::runtime_error("Known l0 (l0_min == l0_max) not "
-		                         "implemented.");
+		throw std::logic_error("Known l0 (l0_min == l0_max) not "
+		                       "implemented.");
 	}
-	if (l1_min == l1_max){
+	if (prior.l1_min == prior.l1_max){
 		/* This is the case of known l1. Not implemented. */
-		throw std::runtime_error("Known l1 (l1_min == l1_max) not "
-		                         "implemented.");
-		return -1;
-	}
-
-	/* Logarithm of the data: */
-	std::vector<double> lX(N);
-	long double lx_sum = 0.0;
-	long double x_sum = 0.0;
-	for (size_t i=0; i<N; ++i){
-		x_sum += X[i];
-		lX[i] = std::log(X[i]);
-		lx_sum += lX[i];
+		throw std::logic_error("Known l1 (l1_min == l1_max) not "
+		                       "implemented.");
 	}
 
 	/* Compute the normalization constant.
 	 * First determine the maximum mu:
 	 */
-	std::pair<long double, long double>
-	   mu_lp_max = maximum_posterior_mu<long double>(lX, lx_sum, x_sum, l0_min,
-	                                                 l0_max, l1_min, l1_max);
-	const long double mu_max = mu_lp_max.first;
-	const long double log_posterior_max = mu_lp_max.second;
+	if (lmp_log_norm == -1.0){
+		std::pair<long double, long double>
+		   mu_lp_max = maximum_posterior_mu<long double>(lX, lx_sum, x_sum,
+		                                                 prior.l0_min,
+		                                                 prior.l0_max,
+		                                                 prior.l1_min,
+		                                                 prior.l1_max);
+		const long double mu_max = mu_lp_max.first;
+		const long double log_posterior_max = mu_lp_max.second;
 
-	/* Now integrate to compute : */
-	tanh_sinh<long double> ts_integrator;
-	exp_sinh<long double> es_integrator;
-	const long double norm
-	   = ts_integrator.integrate(
-	         [&](long double mu) -> long double
-	         {
-	              return mth::exp(log_mean_posterior_eval<long double>(mu, lX,
-	                              lx_sum, l0_min, l0_max, l1_min, l1_max,
-	                              log_posterior_max));
-	         },
-	         (long double)0.0, mu_max)
-	   + es_integrator.integrate(
-	         [&](long double mu_shifted) -> long double
-	         {
-	              return mth::exp(log_mean_posterior_eval<long double>(
-	                              mu_shifted+mu_max, lX, lx_sum,
-	                              l0_min, l0_max, l1_min, l1_max,
-	                              log_posterior_max));
-	         }
-	     );
-	const long double log_norm = mth::log(norm) + log_posterior_max;
+		/* Now integrate to compute the normalization constant: */
+		tanh_sinh<long double> ts_integrator;
+		exp_sinh<long double> es_integrator;
+		const long double norm
+		   = ts_integrator.integrate(
+		         [&](long double mu) -> long double
+		         {
+		              return mth::exp(log_mean_posterior_eval<long double>(mu,
+		                          lX, lx_sum, prior.l0_min, prior.l0_max,
+		                          prior.l1_min, prior.l1_max,
+		                          log_posterior_max));
+		         },
+		         (long double)0.0, mu_max)
+		   + es_integrator.integrate(
+		         [&](long double mu_shifted) -> long double
+		         {
+		              return mth::exp(log_mean_posterior_eval<long double>(
+		                              mu_shifted+mu_max, lX, lx_sum,
+		                              prior.l0_min, prior.l0_max, prior.l1_min,
+		                              prior.l1_max, log_posterior_max));
+		         }
+		     );
 
+		lmp_log_norm = mth::log(norm) + log_posterior_max;
+	}
 
 	/* Now evaluate posterior: */
 	#pragma omp parallel for
 	for (size_t i=0; i<M; ++i){
 		log_posterior[i]
-		   = log_mean_posterior_eval<long double>(mu[i], lX, lx_sum, l0_min,
-		                                          l0_max, l1_min, l1_max,
-		                                          log_norm);
+		   = log_mean_posterior_eval<long double>(mu[i], lX, lx_sum,
+		                                          prior.l0_min, prior.l0_max,
+		                                          prior.l1_min, prior.l1_max,
+		                                          lmp_log_norm);
 	}
-
-	return 0;
 
 }
 
 
+LogNormalPosterior::post_pred_t::post_pred_t(size_t N, long double dlga)
+   : lX_xi(N+1), dlga(dlga)
+{}
 
-int LogNormalPosterior::log_posterior_predictive(const size_t M,
-                          const double* x, double* log_post_pred,
-                          const size_t N, const double* X,
-                          const double l0_min, const double l0_max,
-                          const double l1_min, const double l1_max
-                          )
+LogNormalPosterior::post_pred_t
+LogNormalPosterior::predictive_parameters() const
+{
+	const size_t N = lX.size();
+	post_pred_t params(N, math<long double>::lgamma(0.5 * (N + 1.0) - 0.5)
+	                      - math<long double>::lgamma(0.5 * N - 0.5));
+	std::copy(lX.cbegin(), lX.cend(), params.lX_xi.begin());
+
+	return params;
+}
+
+
+void LogNormalPosterior::log_posterior_predictive(const size_t M,
+                                                  const double* x,
+                                                  double* log_post_pred) const
 {
 	/* Sanity check: */
-	sanity_check(l0_min, l0_max, l1_min, l1_max);
-	if (l0_min == l0_max){
+	if (prior.l0_min == prior.l0_max){
 		/* This is the case of known l0. Not implemented. */
-		return -1;
+		throw std::logic_error("Known l0 (l0_min == l0_max) not "
+		                       "implemented.");
 	}
-	if (l1_min == l1_max){
+	if (prior.l1_min == prior.l1_max){
 		/* This is the case of known l1. Not implemented. */
-		return -1;
+		throw std::logic_error("Known l1 (l1_min == l1_max) not "
+		                       "implemented.");
 	}
-
-	/* Logarithm of the data: */
-	std::vector<double> lX(N);
-	for (size_t i=0; i<N; ++i){
-		lX[i] = std::log(X[i]);
-	}
-
-	/* The following vector contains the joint set of data x_i and
-	 * the evaluation point x (which can always be set to the */
-	std::vector<double> lX_xi(N+1);
-	std::copy(lX.cbegin(), lX.cend(), lX_xi.begin());
 
 	/* Normalization constant: */
 	constexpr long double ln_sqrt_2pi
 	   = 0.5 * std::log((long double)2.0 * std::numbers::pi_v<long double>);
-	const long double lI
-	   = compute_log_integral_I<long double>(l0_min, l0_max, l1_min,
-	                                         l1_max, lX);
+	compute_lI();
+	post_pred_t pred_params = predictive_parameters();
 
 	/* Evaluate posterior: */
-	const long double dlga = math<long double>::lgamma(0.5 * (N + 1.0) - 0.5)
-	                       - math<long double>::lgamma(0.5 * N - 0.5);
-	#pragma omp parallel for firstprivate(lX_xi)
+	#pragma omp parallel for firstprivate(pred_params)
 	for (size_t i=0; i<M; ++i){
 		const double xi = x[i];
 		if (xi <= 0.0)
@@ -704,16 +710,142 @@ int LogNormalPosterior::log_posterior_predictive(const size_t M,
 				/* Create the joint set of lX and the logarithm of the
 				 * evaluation point: */
 				const double lxi = std::log(xi);
-				lX_xi.back() = lxi;
+				pred_params.lX_xi.back() = lxi;
 
 				const long double lI_xi
-				   = compute_log_integral_I<long double>(l0_min, l0_max, l1_min,
-				                                         l1_max, lX_xi);
-				log_post_pred[i] = -ln_sqrt_2pi - lxi + dlga + lI_xi - lI;
+				   = compute_log_integral_I<long double>(prior.l0_min,
+				                                         prior.l0_max,
+				                                         prior.l1_min,
+				                                         prior.l1_max,
+				                                         pred_params.lX_xi);
+				log_post_pred[i] = -ln_sqrt_2pi - lxi + pred_params.dlga
+				                   + lI_xi - lI;
 			} catch (...) {
 				log_post_pred[i] = std::numeric_limits<double>::quiet_NaN();
 			}
 		}
 	}
-	return 0;
+}
+
+
+void LogNormalPosterior::posterior_predictive_cdf(const size_t M,
+                                                  const double* x,
+                                                  double* post_pred_cdf) const
+{
+	typedef math<long double> mth;
+
+	/* Sanity check: */
+	if (prior.l0_min == prior.l0_max){
+		/* This is the case of known l0. Not implemented. */
+		throw std::logic_error("Known l0 (l0_min == l0_max) not "
+		                       "implemented.");
+	}
+	if (prior.l1_min == prior.l1_max){
+		/* This is the case of known l1. Not implemented. */
+		throw std::logic_error("Known l1 (l1_min == l1_max) not "
+		                       "implemented.");
+	}
+
+	/* Normalization constant: */
+	constexpr long double ln_sqrt_2pi
+	   = 0.5 * std::log((long double)2.0 * std::numbers::pi_v<long double>);
+	compute_lI();
+
+	/*
+	 * Sort the evaluation points of the CDF:
+	 */
+	struct dbl_id {
+		double x;
+		size_t i;
+
+		bool operator<(const dbl_id& other) const {
+			return x < other.x;
+		};
+	};
+	std::vector<dbl_id> x_sorted(M);
+	for (size_t i=0; i<M; ++i){
+		x_sorted[i].x = x[i];
+		x_sorted[i].i = i;
+	}
+	std::sort(x_sorted.begin(), x_sorted.end());
+
+	/* The PDF we integrate: */
+	auto pdf = [&](const long double x) -> long double {
+		if (x <= 0.0)
+			return 0.0;
+		else {
+			post_pred_t pred_params = predictive_parameters();
+			try {
+				/* Create the joint set of lX and the logarithm of the
+				 * evaluation point: */
+				const long double lx = mth::log(x);
+				pred_params.lX_xi.back() = lx;
+
+				const long double lI_xi
+				   = compute_log_integral_I<long double>(prior.l0_min,
+				                                         prior.l0_max,
+				                                         prior.l1_min,
+				                                         prior.l1_max,
+				                                         pred_params.lX_xi);
+				return mth::exp(-ln_sqrt_2pi - lx + pred_params.dlga + lI_xi
+				                - lI);
+			} catch (...) {
+				return std::numeric_limits<long double>::quiet_NaN();
+			}
+		}
+	};
+
+	/* Integrate: */
+	struct result_t {
+		long double inc;
+		long double err;
+	};
+	std::vector<result_t> increments(M);
+	std::exception except;
+	bool have_exception = false;
+	/* First round to get a feeling for the integration: */
+	#pragma omp parallel for
+	for (size_t i=0; i<M; ++i){
+		const double left = (i == 0) ? 0.0 : x_sorted[i-1].x;
+		typedef gauss_kronrod<long double, 7> GK7;
+		try {
+			increments[i].inc = GK7::integrate(pdf, left, x_sorted[i].x, 0,
+			                                   0.0, &increments[i].err);
+		} catch (const std::exception& e) {
+			have_exception = true;
+			except = e;
+		}
+	}
+	if (have_exception)
+		throw except;
+	/* Now correct intervals of large error: */
+	#pragma omp parallel for
+	for (size_t i=0; i<M; ++i){
+		constexpr long double root_eps
+		   = boost::math::tools::root_epsilon<long double>();
+		if (increments[i].err > root_eps){
+			const double left = (i == 0) ? 0.0 : x_sorted[i-1].x;
+			typedef gauss_kronrod<long double, 15> GK15;
+			try {
+				increments[i].inc = GK15::integrate(pdf, left, x_sorted[i].x, 7,
+				                                    root_eps,
+				                                    &increments[i].err);
+			} catch (const std::exception& e) {
+				have_exception = true;
+				except = e;
+			}
+		}
+	}
+	if (have_exception)
+		throw except;
+
+	/* Cumulative: */
+	long double cdf = 0.0;
+	long double cumul_err = 0.0;
+	for (size_t i=0; i<M; ++i){
+		cdf += increments[i].inc;
+		cumul_err += increments[i].err;
+		post_pred_cdf[x_sorted[i].i] = cdf;
+	}
+
 }

@@ -14,7 +14,7 @@ dep_py = python.dependency()
 
 python.extension_module('bayes',
                         'pybalonor/bayes.pyx',
-                        dependencies : [dep_py],
+                        dependencies : [dep_py, dependency('boost')],
                         include_directories : include_directories('include'),
                         override_options : ['cython_language=cpp'],
                         link_with : liblognormal)
