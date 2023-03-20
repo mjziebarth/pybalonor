@@ -35,16 +35,16 @@ class CyLogNormalPosterior:
     def log_posterior(self, l0, l1):
         pass
 
-    def log_posterior_predictive(x):
+    def log_posterior_predictive(self, x):
         pass
 
-    def posterior_predictive(x):
+    def posterior_predictive(self, x):
         pass
 
-    def posterior_predictive_cdf(x):
+    def posterior_predictive_cdf(self, x):
         pass
 
-    def log_mean_posterior(mu):
+    def log_mean_posterior(self, mu):
         pass
 ```
 The parameters are as follows:
