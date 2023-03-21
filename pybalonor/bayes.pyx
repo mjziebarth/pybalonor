@@ -29,7 +29,19 @@ cdef extern from "lognormal.hpp" namespace "indiapaleale" nogil:
 
         @staticmethod
         int posterior_predictive_cdf(const size_t M, const double* x,
-                                     double* log_post_pred) except+
+                                     double* post_pred_cdf) except+
+
+        @staticmethod
+        int posterior_predictive_ccdf(const size_t M, const double* x,
+                                      double* post_pred_ccdf) except+
+
+        @staticmethod
+        int posterior_predictive_quantiles(const size_t M, const double* q,
+                                           double* post_pred_quant) except+
+
+        @staticmethod
+        int posterior_predictive_tail_quantiles(const size_t M, const double* q,
+                                                double* post_pred_tq) except+
 
 
 cdef class CyLogNormalPosterior:
@@ -138,3 +150,60 @@ cdef class CyLogNormalPosterior:
                                                             &post_pred_cdf[0])
 
         return post_pred_cdf.base
+
+
+    def posterior_predictive_ccdf(self, const double[::1] x):
+        """
+        Compute the posterior predictive complementary CDF.
+        """
+        cdef size_t M = x.shape[0]
+        if M == 0:
+            return np.empty(0)
+
+        if not self._posterior:
+            raise RuntimeError("CyLogNormalPosterior not properly initialized.")
+
+        cdef double[::1] post_pred_ccdf = np.empty(M)
+        with nogil:
+            deref(self._posterior).posterior_predictive_ccdf(M, &x[0],
+                                                             &post_pred_ccdf[0])
+
+        return post_pred_ccdf.base
+
+
+    def posterior_predictive_quantiles(self, const double[::1] q):
+        """
+        Compute the quantiles of the posterior predictive CDF.
+        """
+        cdef size_t M = q.shape[0]
+        if M == 0:
+            return np.empty(0)
+
+        if not self._posterior:
+            raise RuntimeError("CyLogNormalPosterior not properly initialized.")
+
+        cdef double[::1] post_pred_quant = np.empty(M)
+        with nogil:
+            deref(self._posterior).posterior_predictive_quantiles(M, &q[0],
+                                                        &post_pred_quant[0])
+
+        return post_pred_quant.base
+
+
+    def posterior_predictive_tail_quantiles(self, const double[::1] q):
+        """
+        Compute the quantiles of the posterior predictive complementary CDF.
+        """
+        cdef size_t M = q.shape[0]
+        if M == 0:
+            return np.empty(0)
+
+        if not self._posterior:
+            raise RuntimeError("CyLogNormalPosterior not properly initialized.")
+
+        cdef double[::1] post_pred_quant = np.empty(M)
+        with nogil:
+            deref(self._posterior).posterior_predictive_tail_quantiles(M, &q[0],
+                                                        &post_pred_quant[0])
+
+        return post_pred_quant.base

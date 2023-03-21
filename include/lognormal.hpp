@@ -32,7 +32,16 @@ public:
 	                              double* log_post_pred) const;
 
 	void posterior_predictive_cdf(const size_t M, const double* x,
-	                              double* log_post_pred) const;
+	                              double* pred_cdf) const;
+
+	void posterior_predictive_ccdf(const size_t M, const double* x,
+	                               double* pred_ccdf) const;
+
+	void posterior_predictive_quantiles(const size_t M, const double* q,
+	                                    double* pred_quantiles) const;
+
+	void posterior_predictive_tail_quantiles(const size_t M, const double* q,
+	                                         double* pred_tail_quantiles) const;
 
 private:
 	struct prior_t {
@@ -75,11 +84,18 @@ private:
 	 * Variables for the posterior predictive CDF and cCDF:
 	 */
 	typedef CenteredExpTanTransform<long double> pred_trans_t;
-	typedef BarycentricLagrangeCDFInterpolator<pred_trans_t> pred_interp_t;
+	typedef BarycentricLagrangeCDFInterpolator<pred_trans_t> pred_cdf_interp_t;
+	typedef BarycentricLagrangeCDFInterpolator<pred_trans_t,true>
+	        pred_ccdf_interp_t;
 	size_t n_chebyshev;
-	mutable std::optional<pred_interp_t> predictive_cdf_interpolator;
+	mutable std::optional<pred_cdf_interp_t> predictive_cdf_interpolator;
+	mutable std::optional<pred_ccdf_interp_t> predictive_ccdf_interpolator;
 
-	void init_predictive_cdf_interpolator() const;
+	enum cumulative_t {
+		CDF,
+		CCDF
+	};
+	void init_predictive_cumulative_interpolator(cumulative_t which) const;
 
 
 	static prior_t sanity_check(double l0_min, double l0_max, double l1_min,

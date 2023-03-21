@@ -735,11 +735,16 @@ void LogNormalPosterior::log_posterior_predictive(const size_t M,
 }
 
 
-void LogNormalPosterior::init_predictive_cdf_interpolator() const
+void
+LogNormalPosterior::init_predictive_cumulative_interpolator(
+    LogNormalPosterior::cumulative_t which
+) const
 {
 	typedef math<long double> mth;
 
-	if (!predictive_cdf_interpolator){
+	if ((!predictive_cdf_interpolator && which == CDF) ||
+	    (!predictive_ccdf_interpolator && which == CCDF))
+	{
 		/*
 		 * Normalization constant:
 		 */
@@ -785,8 +790,12 @@ void LogNormalPosterior::init_predictive_cdf_interpolator() const
 		};
 
 		/* Compute the CDF interpolator: */
-		predictive_cdf_interpolator = pred_interp_t(pdf, transform,
-		                                            n_chebyshev);
+		if (which == CDF)
+			predictive_cdf_interpolator = pred_cdf_interp_t(pdf, transform,
+			                                                n_chebyshev);
+		else
+			predictive_ccdf_interpolator = pred_ccdf_interp_t(pdf, transform,
+			                                                  n_chebyshev);
 	}
 }
 
@@ -810,19 +819,142 @@ void LogNormalPosterior::posterior_predictive_cdf(const size_t M,
 	}
 
 	/* Ensure that we have the CDF interpolator: */
-	init_predictive_cdf_interpolator();
+	init_predictive_cumulative_interpolator(CDF);
 
 	/* Interpolate: */
 	std::exception except;
 	bool have_exception = false;
-	/* First round to get a feeling for the integration: */
-	const pred_interp_t& cdf(*predictive_cdf_interpolator);
+	const pred_cdf_interp_t& cdf(*predictive_cdf_interpolator);
 	#pragma omp parallel for
 	for (size_t i=0; i<M; ++i){
 		if (have_exception)
 			continue;
 		try {
 			post_pred_cdf[i] = cdf(x[i]);
+		} catch (const std::exception& e) {
+			have_exception = true;
+			except = e;
+		}
+	}
+	if (have_exception)
+		throw except;
+}
+
+
+void LogNormalPosterior::posterior_predictive_ccdf(const size_t M,
+                                                   const double* x,
+                                                   double* post_pred_ccdf) const
+{
+	typedef math<long double> mth;
+
+	/* Sanity check: */
+	if (prior.l0_min == prior.l0_max){
+		/* This is the case of known l0. Not implemented. */
+		throw std::logic_error("Known l0 (l0_min == l0_max) not "
+		                       "implemented.");
+	}
+	if (prior.l1_min == prior.l1_max){
+		/* This is the case of known l1. Not implemented. */
+		throw std::logic_error("Known l1 (l1_min == l1_max) not "
+		                       "implemented.");
+	}
+
+	/* Ensure that we have the CDF interpolator: */
+	init_predictive_cumulative_interpolator(CCDF);
+
+	/* Interpolate: */
+	std::exception except;
+	bool have_exception = false;
+	const pred_ccdf_interp_t& ccdf(*predictive_ccdf_interpolator);
+	#pragma omp parallel for
+	for (size_t i=0; i<M; ++i){
+		if (have_exception)
+			continue;
+		try {
+			post_pred_ccdf[i] = ccdf(x[i]);
+		} catch (const std::exception& e) {
+			have_exception = true;
+			except = e;
+		}
+	}
+	if (have_exception)
+		throw except;
+}
+
+
+void LogNormalPosterior::posterior_predictive_quantiles(const size_t M,
+                                                  const double* q,
+                                                  double* post_pred_q) const
+{
+	typedef math<long double> mth;
+
+	/* Sanity check: */
+	if (prior.l0_min == prior.l0_max){
+		/* This is the case of known l0. Not implemented. */
+		throw std::logic_error("Known l0 (l0_min == l0_max) not "
+		                       "implemented.");
+	}
+	if (prior.l1_min == prior.l1_max){
+		/* This is the case of known l1. Not implemented. */
+		throw std::logic_error("Known l1 (l1_min == l1_max) not "
+		                       "implemented.");
+	}
+
+	/* Ensure that we have the CDF interpolator: */
+	init_predictive_cumulative_interpolator(CDF);
+
+	/* Interpolate: */
+	std::exception except;
+	bool have_exception = false;
+	const pred_cdf_interp_t& cdf(*predictive_cdf_interpolator);
+	#pragma omp parallel for
+	for (size_t i=0; i<M; ++i){
+		if (have_exception)
+			continue;
+		try {
+			post_pred_q[i] = cdf.quantile(q[i]);
+		} catch (const std::exception& e) {
+			std::cout << "exception: " << e.what() << "\n" << std::flush;
+			have_exception = true;
+			except = e;
+		}
+	}
+	if (have_exception)
+		throw except;
+}
+
+
+void LogNormalPosterior::posterior_predictive_tail_quantiles(const size_t M,
+                                                  const double* q,
+                                                  double* post_pred_tq) const
+{
+	typedef math<long double> mth;
+
+	/* Sanity check: */
+	if (prior.l0_min == prior.l0_max){
+		/* This is the case of known l0. Not implemented. */
+		throw std::logic_error("Known l0 (l0_min == l0_max) not "
+		                       "implemented.");
+	}
+	if (prior.l1_min == prior.l1_max){
+		/* This is the case of known l1. Not implemented. */
+		throw std::logic_error("Known l1 (l1_min == l1_max) not "
+		                       "implemented.");
+	}
+
+	/* Ensure that we have the CDF interpolator: */
+	init_predictive_cumulative_interpolator(CCDF);
+
+	/* Interpolate: */
+	std::exception except;
+	bool have_exception = false;
+	const pred_ccdf_interp_t& ccdf(*predictive_ccdf_interpolator);
+	#pragma omp parallel for
+	for (size_t i=0; i<M; ++i){
+		if (have_exception)
+			continue;
+		try {
+			post_pred_tq[i] = ccdf.quantile(q[i]);
 		} catch (const std::exception& e) {
 			have_exception = true;
 			except = e;
