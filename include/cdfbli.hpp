@@ -45,10 +45,12 @@ public:
 	 */
 	real inv(real x) const {
 		constexpr real half_pi = std::numbers::pi_v<real> / 2;
-		if (x < 0)
-			throw std::domain_error("Transformed coordinate out of transformed "
-			                        "domain.");
-		else if (x == 0)
+		if (x < 0){
+			std::string msg("Transformed coordinate ");
+			msg.append(std::to_string(x));
+			msg.append(" out of transformed domain.");
+			throw std::domain_error(msg);
+		} else if (x == 0)
 			return -1.0;
 		else if (std::isinf(x))
 			return 1.0;
