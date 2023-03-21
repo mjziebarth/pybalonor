@@ -267,9 +267,10 @@ public:
 			                   eps_tol, max_iter);
 
 			/* Bracket is in the input domain of the transform.
-			 * Need to transform back to the input domain of the PDF:
+			 * Need to transform back to the input domain of the PDF
+			 * (the output domain of the transform):
 			 */
-			return trans.inv(0.5*(bracket.first + bracket.second));
+			return trans(0.5*(bracket.first + bracket.second));
 		}
 	}
 
