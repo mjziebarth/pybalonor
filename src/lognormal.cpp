@@ -413,7 +413,7 @@ void LogNormalPosterior::log_posterior(const size_t M, const double* l0,
 		const double l0i = l0[i];
 		const double l1i = l1[i];
 		if (l0i < prior.l0_min || l0i > prior.l0_max || l1i < prior.l1_min
-		    || l1i > prior.l1_max)
+		    || l1i > prior.l1_max || l1i == 0.0)
 			log_post[i] = -std::numeric_limits<double>::infinity();
 		else {
 			long double C1 = 0.0;
