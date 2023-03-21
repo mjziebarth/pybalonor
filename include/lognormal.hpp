@@ -6,6 +6,8 @@
 #include <vector>
 #include <limits>
 
+#include <cdfbli.hpp>
+
 #ifndef INDIAPALEALE_LOGNORMAL_HPP
 #define INDIAPALEALE_LOGNORMAL_HPP
 
@@ -15,7 +17,7 @@ class LogNormalPosterior {
 public:
 	LogNormalPosterior(const size_t N, const double* X, const double l0_min,
 	                   const double l0_max, const double l1_min,
-	                   const double l1_max);
+	                   const double l1_max, size_t n_chebyshev);
 
 	void log_posterior(const size_t M, const double* l0, const double* l1,
 	                   double* log_post) const;
@@ -54,6 +56,10 @@ private:
 	 */
 	mutable long double lmp_log_norm = -1.0;
 
+	/*
+	 * Variables for the posterior predictive:
+	 */
+
 	struct post_pred_t {
 		/* The following vector contains the joint set of data x_i and
 		 * the evaluation point x (which can always be set to the */
@@ -64,6 +70,17 @@ private:
 	};
 
 	post_pred_t predictive_parameters() const;
+
+	/*
+	 * Variables for the posterior predictive CDF and cCDF:
+	 */
+	typedef CenteredExpTanTransform<long double> pred_trans_t;
+	typedef BarycentricLagrangeCDFInterpolator<pred_trans_t> pred_interp_t;
+	size_t n_chebyshev;
+	mutable std::optional<pred_interp_t> predictive_cdf_interpolator;
+
+	void init_predictive_cdf_interpolator() const;
+
 
 	static prior_t sanity_check(double l0_min, double l0_max, double l1_min,
 	                            double l1_max);

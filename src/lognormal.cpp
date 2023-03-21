@@ -1,5 +1,4 @@
 #include <lognormal.hpp>
-#include <math.h>
 #include <cmath>
 #include <vector>
 #include <string>
@@ -42,26 +41,7 @@ using boost::math::tools::bracket_and_solve_root;
 using boost::math::tools::brent_find_minima;
 using boost::math::tools::eps_tolerance;
 using indiapaleale::LogNormalPosterior;
-
-template<typename real>
-struct math;
-
-template<>
-struct math<long double>
-{
-	static long double exp(long double x){
-		return expl(x);
-	}
-	static long double log(long double x){
-		return logl(x);
-	}
-	static long double sqrt(long double x){
-		return sqrtl(x);
-	}
-	static long double lgamma(long double x){
-		return lgammal(x);
-	}
-};
+using indiapaleale::math;
 
 template<typename real>
 struct lognormal_params_t {
@@ -173,25 +153,29 @@ real compute_log_integral_I(real a, real b, real c, real d,
 				log_scale = log_integrand(l0_mle);
 		}
 
-		auto integrand = [&](real l0) -> real {
-			real C1 = 0.0;
-			for (double lxi : lx){
-				const real dlx = lxi - l0;
-				C1 += dlx * dlx;
-			}
-			C1 *= 0.5;
-			real log_integrand = -alpha * math<real>::log(C1);
-			return math<real>::exp(log_integrand - log_scale);
-		};
-
-		tanh_sinh<real> integrator;
-		if (a < l0_mle && b > l0_mle)
-			I =   integrator.integrate(integrand, a, l0_mle)
-			    + integrator.integrate(integrand, l0_mle, b);
+		if (std::isinf(log_scale))
+			I = 0.0;
 		else {
-			I = integrator.integrate(integrand, a, b);
+			auto integrand = [&](real l0) -> real {
+				real C1 = 0.0;
+				for (double lxi : lx){
+					const real dlx = lxi - l0;
+					C1 += dlx * dlx;
+				}
+				C1 *= 0.5;
+				real log_integrand = -alpha * math<real>::log(C1);
+				return math<real>::exp(log_integrand - log_scale);
+			};
+
+			tanh_sinh<real> integrator;
+			if (a < l0_mle && b > l0_mle)
+				I =   integrator.integrate(integrand, a, l0_mle)
+				    + integrator.integrate(integrand, l0_mle, b);
+			else {
+				I = integrator.integrate(integrand, a, b);
+			}
 		}
-	} else  if (c == 0.0){
+	} else if (c == 0.0){
 		/*
 		 * Finite interval with c == 0.
 		 */
@@ -217,24 +201,35 @@ real compute_log_integral_I(real a, real b, real c, real d,
 				log_scale = log_integrand(l0_mle);
 		}
 
-		auto integrand = [&](real l0) -> real {
-			real C1 = 0.0;
-			for (double lxi : lx){
-				const real dlx = lxi - l0;
-				C1 += dlx * dlx;
-			}
-			C1 *= 0.5;
-			real log_integrand = -alpha * math<real>::log(C1)
-			    + math<real>::log(boost::math::gamma_q(alpha, C1/d2));
-			return math<real>::exp(log_integrand - log_scale);
-		};
-
-		tanh_sinh<real> integrator;
-		if (a < l0_mle && b > l0_mle)
-			I =   integrator.integrate(integrand, a, l0_mle)
-			    + integrator.integrate(integrand, l0_mle, b);
+		if (std::isinf(log_scale))
+			I = 0.0;
 		else {
-			I = integrator.integrate(integrand, a, b);
+			auto integrand = [&](real l0) -> real {
+				real C1 = 0.0;
+				for (double lxi : lx){
+					const real dlx = lxi - l0;
+					C1 += dlx * dlx;
+				}
+				C1 *= 0.5;
+				real log_integrand = -alpha * math<real>::log(C1)
+				    + math<real>::log(boost::math::gamma_q(alpha, C1/d2));
+				real I = math<real>::exp(log_integrand - log_scale);
+				if (std::isinf(I) || std::isnan(I)){
+					std::cout << "Integrand infinite!\nC1 = "
+					          << C1
+					          << "\nlog_integrand = " << log_integrand << "\nlog_scale = "
+					          << log_scale << "\n" << std::flush;
+				}
+				return I;
+			};
+
+			tanh_sinh<real> integrator;
+			if (a < l0_mle && b > l0_mle)
+				I =   integrator.integrate(integrand, a, l0_mle)
+				    + integrator.integrate(integrand, l0_mle, b);
+			else {
+				I = integrator.integrate(integrand, a, b);
+			}
 		}
 
 	} else if (std::isinf(d)) {
@@ -263,26 +258,29 @@ real compute_log_integral_I(real a, real b, real c, real d,
 				log_scale = log_integrand(l0_mle);
 		}
 
-		auto integrand = [&](real l0) -> real {
-			real C1 = 0.0;
-			for (double lxi : lx){
-				const real dlx = lxi - l0;
-				C1 += dlx * dlx;
-			}
-			C1 *= 0.5;
-			real log_integrand = -alpha * math<real>::log(C1)
-			    + math<real>::log(boost::math::gamma_p(alpha, C1/c2));
-			return math<real>::exp(log_integrand - log_scale);
-		};
-
-		tanh_sinh<real> integrator;
-		if (a < l0_mle && b > l0_mle)
-			I =   integrator.integrate(integrand, a, l0_mle)
-			    + integrator.integrate(integrand, l0_mle, b);
+		if (std::isinf(log_scale))
+			I = 0.0;
 		else {
-			I = integrator.integrate(integrand, a, b);
-		}
+			auto integrand = [&](real l0) -> real {
+				real C1 = 0.0;
+				for (double lxi : lx){
+					const real dlx = lxi - l0;
+					C1 += dlx * dlx;
+				}
+				C1 *= 0.5;
+				real log_integrand = -alpha * math<real>::log(C1)
+				    + math<real>::log(boost::math::gamma_p(alpha, C1/c2));
+				return math<real>::exp(log_integrand - log_scale);
+			};
 
+			tanh_sinh<real> integrator;
+			if (a < l0_mle && b > l0_mle)
+				I =   integrator.integrate(integrand, a, l0_mle)
+				    + integrator.integrate(integrand, l0_mle, b);
+			else {
+				I = integrator.integrate(integrand, a, b);
+			}
+		}
 	} else {
 		/*
 		 * Finite interval with c > 0.
@@ -310,24 +308,29 @@ real compute_log_integral_I(real a, real b, real c, real d,
 				log_scale = log_integrand(l0_mle);
 		}
 
-		auto integrand = [&](real l0) -> real {
-			real C1 = 0.0;
-			for (double lxi : lx){
-				const real dlx = lxi - l0;
-				C1 += dlx * dlx;
-			}
-			C1 *= 0.5;
-			real log_integrand = -alpha * math<real>::log(C1)
-			    + log_delta_gamma_div_loggamma(alpha, C1/c2, C1/d2);
-			return math<real>::exp(log_integrand - log_scale);
-		};
-
-		tanh_sinh<real> integrator;
-		if (a < l0_mle && b > l0_mle)
-			I =   integrator.integrate(integrand, a, l0_mle)
-			    + integrator.integrate(integrand, l0_mle, b);
+		if (std::isinf(I))
+			I = 0.0;
 		else {
-			I = integrator.integrate(integrand, a, b);
+			auto integrand = [&](real l0) -> real {
+				real C1 = 0.0;
+				for (double lxi : lx){
+					const real dlx = lxi - l0;
+					C1 += dlx * dlx;
+				}
+				C1 *= 0.5;
+				real log_integrand = -alpha * math<real>::log(C1)
+				    + log_delta_gamma_div_loggamma(alpha, C1/c2, C1/d2);
+				real I = math<real>::exp(log_integrand - log_scale);
+				return I;
+			};
+
+			tanh_sinh<real> integrator;
+			if (a < l0_mle && b > l0_mle)
+				I =   integrator.integrate(integrand, a, l0_mle)
+				    + integrator.integrate(integrand, l0_mle, b);
+			else {
+				I = integrator.integrate(integrand, a, b);
+			}
 		}
 	}
 
@@ -360,17 +363,21 @@ static std::vector<long double> compute_lX(const size_t N, const double* X)
 			throw std::runtime_error("Encountered x < 0.");
 		lX[i] = math<long double>::log(xi);
 	}
+	/* Sort lX for later median computation: */
+	std::sort(lX.begin(), lX.end());
 	return lX;
 }
 
 LogNormalPosterior::LogNormalPosterior(const size_t N, const double* X,
                        const double l0_min, const double l0_max,
-                       const double l1_min, const double l1_max)
+                       const double l1_min, const double l1_max,
+                       size_t n_chebyshev)
    : prior(sanity_check(l0_min, l0_max, l1_min, l1_max)),
      lX(compute_lX(N,X)),
      x_sum(std::accumulate(X, X+N, 0.0)),
      lx_sum(std::accumulate(lX.cbegin(), lX.cend(), 0.0)),
-     lga(math<long double>::lgamma(0.5 * N - 0.5))
+     lga(math<long double>::lgamma(0.5 * N - 0.5)),
+     n_chebyshev(n_chebyshev)
 {
 }
 
@@ -728,6 +735,62 @@ void LogNormalPosterior::log_posterior_predictive(const size_t M,
 }
 
 
+void LogNormalPosterior::init_predictive_cdf_interpolator() const
+{
+	typedef math<long double> mth;
+
+	if (!predictive_cdf_interpolator){
+		/*
+		 * Normalization constant:
+		 */
+		constexpr long double ln_sqrt_2pi
+		   = 0.5 * std::log((long double)2.0 * std::numbers::pi_v<long double>);
+		compute_lI();
+
+		/* Compute the median (easy since lX is sorted): */
+		long double center = mth::exp(lX[lX.size() / 2]);
+
+		/* Setup a transform that spreads the posterior predictive CDF
+		 * quite evenly in the interval [-1,1]:
+		 */
+		pred_trans_t transform(center);
+
+		/* The PDF we integrate: */
+		auto pdf = [&](const long double x) -> long double {
+			if (x <= 0.0)
+				return 0.0;
+			else if (std::isinf(x))
+				return 0.0;
+			else {
+				post_pred_t pred_params = predictive_parameters();
+				try {
+					/* Create the joint set of lX and the logarithm of the
+					 * evaluation point: */
+					const long double lx = mth::log(x);
+					pred_params.lX_xi.back() = lx;
+
+
+					const long double lI_xi
+					   = compute_log_integral_I<long double>(prior.l0_min,
+					                                         prior.l0_max,
+					                                         prior.l1_min,
+					                                         prior.l1_max,
+					                                         pred_params.lX_xi);
+					return mth::exp(-ln_sqrt_2pi - lx + pred_params.dlga + lI_xi
+						            - lI);
+				} catch (...) {
+					return std::numeric_limits<long double>::quiet_NaN();
+				}
+			}
+		};
+
+		/* Compute the CDF interpolator: */
+		predictive_cdf_interpolator = pred_interp_t(pdf, transform,
+		                                            n_chebyshev);
+	}
+}
+
+
 void LogNormalPosterior::posterior_predictive_cdf(const size_t M,
                                                   const double* x,
                                                   double* post_pred_cdf) const
@@ -746,71 +809,20 @@ void LogNormalPosterior::posterior_predictive_cdf(const size_t M,
 		                       "implemented.");
 	}
 
-	/* Normalization constant: */
-	constexpr long double ln_sqrt_2pi
-	   = 0.5 * std::log((long double)2.0 * std::numbers::pi_v<long double>);
-	compute_lI();
+	/* Ensure that we have the CDF interpolator: */
+	init_predictive_cdf_interpolator();
 
-	/*
-	 * Sort the evaluation points of the CDF:
-	 */
-	struct dbl_id {
-		double x;
-		size_t i;
-
-		bool operator<(const dbl_id& other) const {
-			return x < other.x;
-		};
-	};
-	std::vector<dbl_id> x_sorted(M);
-	for (size_t i=0; i<M; ++i){
-		x_sorted[i].x = x[i];
-		x_sorted[i].i = i;
-	}
-	std::sort(x_sorted.begin(), x_sorted.end());
-
-	/* The PDF we integrate: */
-	auto pdf = [&](const long double x) -> long double {
-		if (x <= 0.0)
-			return 0.0;
-		else {
-			post_pred_t pred_params = predictive_parameters();
-			try {
-				/* Create the joint set of lX and the logarithm of the
-				 * evaluation point: */
-				const long double lx = mth::log(x);
-				pred_params.lX_xi.back() = lx;
-
-				const long double lI_xi
-				   = compute_log_integral_I<long double>(prior.l0_min,
-				                                         prior.l0_max,
-				                                         prior.l1_min,
-				                                         prior.l1_max,
-				                                         pred_params.lX_xi);
-				return mth::exp(-ln_sqrt_2pi - lx + pred_params.dlga + lI_xi
-				                - lI);
-			} catch (...) {
-				return std::numeric_limits<long double>::quiet_NaN();
-			}
-		}
-	};
-
-	/* Integrate: */
-	struct result_t {
-		long double inc;
-		long double err;
-	};
-	std::vector<result_t> increments(M);
+	/* Interpolate: */
 	std::exception except;
 	bool have_exception = false;
 	/* First round to get a feeling for the integration: */
+	const pred_interp_t& cdf(*predictive_cdf_interpolator);
 	#pragma omp parallel for
 	for (size_t i=0; i<M; ++i){
-		const double left = (i == 0) ? 0.0 : x_sorted[i-1].x;
-		typedef gauss_kronrod<long double, 7> GK7;
+		if (have_exception)
+			continue;
 		try {
-			increments[i].inc = GK7::integrate(pdf, left, x_sorted[i].x, 0,
-			                                   0.0, &increments[i].err);
+			post_pred_cdf[i] = cdf(x[i]);
 		} catch (const std::exception& e) {
 			have_exception = true;
 			except = e;
@@ -818,34 +830,4 @@ void LogNormalPosterior::posterior_predictive_cdf(const size_t M,
 	}
 	if (have_exception)
 		throw except;
-	/* Now correct intervals of large error: */
-	#pragma omp parallel for
-	for (size_t i=0; i<M; ++i){
-		constexpr long double root_eps
-		   = boost::math::tools::root_epsilon<long double>();
-		if (increments[i].err > root_eps){
-			const double left = (i == 0) ? 0.0 : x_sorted[i-1].x;
-			typedef gauss_kronrod<long double, 15> GK15;
-			try {
-				increments[i].inc = GK15::integrate(pdf, left, x_sorted[i].x, 7,
-				                                    root_eps,
-				                                    &increments[i].err);
-			} catch (const std::exception& e) {
-				have_exception = true;
-				except = e;
-			}
-		}
-	}
-	if (have_exception)
-		throw except;
-
-	/* Cumulative: */
-	long double cdf = 0.0;
-	long double cumul_err = 0.0;
-	for (size_t i=0; i<M; ++i){
-		cdf += increments[i].inc;
-		cumul_err += increments[i].err;
-		post_pred_cdf[x_sorted[i].i] = cdf;
-	}
-
 }

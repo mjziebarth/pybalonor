@@ -3,7 +3,7 @@ project('bayes','cpp','cython',
 add_project_arguments(['-std=c++20'], language : 'cpp')
 
 liblognormal = static_library(
-    'lognormal', ['src/lognormal.cpp'],
+    'lognormal', ['src/lognormal.cpp','src/math.cpp'],
     dependencies : [dependency('boost'), dependency('openmp')],
     include_directories : include_directories('include')
 )

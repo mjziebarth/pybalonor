@@ -8,7 +8,8 @@ cdef extern from "lognormal.hpp" namespace "indiapaleale" nogil:
     cdef cppclass LogNormalPosterior:
         LogNormalPosterior(const size_t N, const double* X,
                            const double l0_min, const double l0_max,
-                           const double l1_min, const double l1_max) except+
+                           const double l1_min, const double l1_max,
+                           size_t n_chebyshev) except+
 
         @staticmethod
         int log_posterior(const size_t M, const double* l0,
@@ -38,7 +39,7 @@ cdef class CyLogNormalPosterior:
     cdef shared_ptr[LogNormalPosterior] _posterior
 
     def __init__(self, const double[::1] X, double l0_min, double l0_max,
-                 double l1_min, double l1_max):
+                 double l1_min, double l1_max, size_t n_chebyshev):
         """
 
         """
@@ -53,7 +54,7 @@ cdef class CyLogNormalPosterior:
             raise RuntimeError("l0_min has to be non-negative.")
         self._posterior = make_shared[LogNormalPosterior](N, &X[0], l0_min,
                                                           l0_max, l1_min,
-                                                          l1_max)
+                                                          l1_max, n_chebyshev)
 
     def log_posterior(self, const double[::1] l0, const double[::1] l1):
         """
