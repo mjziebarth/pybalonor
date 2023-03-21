@@ -174,13 +174,15 @@ public:
 		#pragma omp parallel for schedule(dynamic,1)
 		for (size_t i : to_refine){
 			try {
+				const real tol = std::min<real>(root_eps / increments[i].inc,
+				                                1.0);
 				increments[i].inc =
 				    GK15::integrate(
 				        pdf,
 				        x[i+1], // left integration boundary
 				        x[i],   // right boundary
-				        7,         // max number of descent levels
-				        root_eps,  // tolerance
+				        7,      // max number of descent levels
+				        tol,    // tolerance
 				        &increments[i].err
 				);
 			} catch (const std::exception& e) {
