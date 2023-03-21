@@ -13,6 +13,7 @@ imposing a finite upper bound on the log-variance parameter.
 ## Installation and Requirements
 The following software is required to install pybalonor:
 - A modern C++ compiler
+- Boost Math
 - The Meson build system
 - Cython
 - NumPy
