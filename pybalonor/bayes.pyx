@@ -88,10 +88,16 @@ cdef class CyLogNormalPosterior:
 
         return log_post.base
 
-    def log_mean_posterior(self, const double[::1] mu):
+    def log_mean_posterior(self, const double[::1] mu, force=False):
         """
         Compute the logarithm of the posterior.
         """
+        if not force:
+            raise NotImplementedError("CyLogNormalPosterior.log_mean_posterior "
+                                      "is likely incorrect. Call again with "
+                                      "keyword parameter 'force=False' to "
+                                      "perform the numerics anyway.")
+
         cdef size_t M = mu.shape[0]
         if M == 0:
             return np.empty(0)
