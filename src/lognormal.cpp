@@ -356,6 +356,9 @@ LogNormalPosterior::sanity_check(double l0_min, double l0_max, double l1_min,
 
 static std::vector<long double> compute_lX(const size_t N, const double* X)
 {
+	if (N <= 1)
+		throw std::runtime_error("Only samples with more than one data point "
+		                         "supported.");
 	std::vector<long double> lX(N);
 	for (size_t i=0; i<N; ++i){
 		const double xi = X[i];
