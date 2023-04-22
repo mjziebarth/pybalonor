@@ -10,6 +10,18 @@ This package uses a simple uniform prior for the log-location and log-variance
 parameter. The problem of normalizing the posterior of the mean is solved by
 imposing a finite upper bound on the log-variance parameter.
 
+## Preface
+If you are looking for *an* analysis of the log-normal distribution, you might
+likely want to check out the R package
+[BayesLN](https://cran.r-project.org/web/packages/BayesLN/index.html) by
+Gardini, Fabrizi, and Trivisano. Their conjugate prior is more sophisticated
+than the flat prior of pybalonor, and, from limited analysis, seems to lead to
+tighter posterior bounds.
+
+If instead you are looking for an analysis based on a flat prior, looking for a
+Python solution, or working with a large data set, go ahead!
+
+
 ## Installation and Requirements
 The following software is required to install pybalonor:
 - A modern C++ compiler
