@@ -92,12 +92,6 @@ cdef class CyLogNormalPosterior:
         """
         Compute the logarithm of the posterior.
         """
-        if not force:
-            raise NotImplementedError("CyLogNormalPosterior.log_mean_posterior "
-                                      "is likely incorrect. Call again with "
-                                      "keyword parameter 'force=False' to "
-                                      "perform the numerics anyway.")
-
         cdef size_t M = mu.shape[0]
         if M == 0:
             return np.empty(0)

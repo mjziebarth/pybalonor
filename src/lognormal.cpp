@@ -460,8 +460,13 @@ real log_mean_posterior_eval(const real mu_i,
 		return -std::numeric_limits<real>::infinity();
 	}
 
-	const real dstar = std::min(mth::sqrt(2.0 * (ln_mu - l0_min)), l1_max);
-	if (dstar <= l1_min){
+	const real lambda0
+	   = std::min(mth::sqrt(std::max<real>(2.0 * (ln_mu - l0_max), 0.0)),
+	              l1_min);
+	const real lambda1
+	   = std::min(mth::sqrt(std::max<real>(2.0 * (ln_mu - l0_min), 0.0)),
+	              l1_max);
+	if (lambda1 <= lambda0){
 		return -std::numeric_limits<real>::infinity();
 	}
 
@@ -491,10 +496,10 @@ real log_mean_posterior_eval(const real mu_i,
 			return N * (ln_mu - 1.0) - 0.5 * N * l1 * l1 - lx_sum
 			       + S / (l1 * l1);
 		};
-		if ((fun0(l1_min) > 0) == (fun0(dstar) > 0)){
+		if ((fun0(lambda0) > 0) == (fun0(lambda1) > 0)){
 			/* No change in sign -> maximum at the boundary */
-			const real li_l = log_integrand(l1_min);
-			const real li_r = log_integrand(dstar);
+			const real li_l = log_integrand(lambda0);
+			const real li_r = log_integrand(lambda1);
 			max_at_boundary = true;
 			log_scale = std::max(li_l, li_r);
 		} else {
@@ -515,17 +520,22 @@ real log_mean_posterior_eval(const real mu_i,
 			};
 			/* Initial guess: */
 			if (2.0 * ln_mu - 2.0/N * lx_sum < 0.0)
-				l1_peak = l1_min + 0.5 * (dstar - l1_min);
+				l1_peak = 0.5 * (lambda1 + lambda0);
 			else
-				l1_peak = std::max(std::min(
-				             mth::sqrt(2 * ln_mu - 2.0/N * lx_sum),
-				             dstar), l1_min);
+				l1_peak
+				   = std::max(
+				        std::min(
+				           mth::sqrt(
+				             std::max<real>(2 * ln_mu - 2.0/N * lx_sum,
+				                            0.0)),
+				           lambda1),
+				        lambda0);
 			const real tol
 			  = mth::sqrt(std::numeric_limits<real>::epsilon());
 			for (size_t j=0; j<100; ++j){
 				real dl1 = - fun0(l1_peak) / fun1(l1_peak);
-				dl1 = std::min(std::max(dl1, -0.9 * (l1_peak - l1_min)),
-				               0.9 * (dstar - l1_peak));
+				dl1 = std::min(std::max(dl1, -0.9 * (l1_peak - lambda0)),
+				               0.9 * (lambda1 - l1_peak));
 				l1_peak += dl1;
 				if (std::abs(dl1) < tol * l1_peak)
 					break;
@@ -550,12 +560,12 @@ real log_mean_posterior_eval(const real mu_i,
 	/* On numerical difficulties, return NaN: */
 	try {
 		if (max_at_boundary){
-			I_l1 = integrator.integrate(integrand, l1_min, dstar);
+			I_l1 = integrator.integrate(integrand, lambda0, lambda1);
 		} else {
-			I_l1 =   integrator.integrate(integrand, l1_min, l1_peak)
-				   + integrator.integrate(integrand, l1_peak, dstar);
+			I_l1 =   integrator.integrate(integrand, lambda0, l1_peak)
+				   + integrator.integrate(integrand, l1_peak, lambda1);
 		}
-		return mth::log(2.0) - log_norm + mth::log(I_l1) + log_scale;
+		return -log_norm + mth::log(I_l1) + log_scale - ln_mu;
 	} catch (...) {
 		std::cout << "quiet_NaN\n";
 		return std::numeric_limits<double>::quiet_NaN();
@@ -619,43 +629,10 @@ void LogNormalPosterior::log_mean_posterior(const size_t M, const double* mu,
 		                       "implemented.");
 	}
 
-	/* Compute the normalization constant.
-	 * First determine the maximum mu:
-	 */
+	/* Compute the normalization constant: */
+	compute_lI();
 	if (lmp_log_norm == -1.0){
-		std::pair<long double, long double>
-		   mu_lp_max = maximum_posterior_mu<long double>(lX, lx_sum, x_sum,
-		                                                 prior.l0_min,
-		                                                 prior.l0_max,
-		                                                 prior.l1_min,
-		                                                 prior.l1_max);
-		const long double mu_max = mu_lp_max.first;
-		const long double log_posterior_max = mu_lp_max.second;
-
-		/* Now integrate to compute the normalization constant: */
-		tanh_sinh<long double> ts_integrator;
-		exp_sinh<long double> es_integrator;
-		const long double norm
-		   = ts_integrator.integrate(
-		         [&](long double mu) -> long double
-		         {
-		              return mth::exp(log_mean_posterior_eval<long double>(mu,
-		                          lX, lx_sum, prior.l0_min, prior.l0_max,
-		                          prior.l1_min, prior.l1_max,
-		                          log_posterior_max));
-		         },
-		         (long double)0.0, mu_max)
-		   + es_integrator.integrate(
-		         [&](long double mu_shifted) -> long double
-		         {
-		              return mth::exp(log_mean_posterior_eval<long double>(
-		                              mu_shifted+mu_max, lX, lx_sum,
-		                              prior.l0_min, prior.l0_max, prior.l1_min,
-		                              prior.l1_max, log_posterior_max));
-		         }
-		     );
-
-		lmp_log_norm = mth::log(norm) + log_posterior_max;
+		lmp_log_norm = lI + lga - mth::log(2.0);
 	}
 
 	/* Now evaluate posterior: */
