@@ -12,6 +12,17 @@ class Posterior:
     """
     The posterior distribution of the log-normal distribution
     parameters given a sample and prior.
+
+    Parameters
+    ----------
+    sample : array_like
+       The sample for which to compute the posterior distribution.
+    prior : FlatPrior
+       The prior distribution.
+    n_chebyshev : int, optional
+       The number of Chebyshev points used in the barycentric Lagrange
+       interpolation of the posterior predictive CDF for the posterior
+       predictive quantiles. Defaults to 100.
     """
     def __init__(self, sample: Iterable[float], prior: Prior,
                  n_chebyshev: int = 100):
@@ -38,7 +49,22 @@ class Posterior:
 
     def density(self, l0: Vector, l1: Vector) -> np.ndarray:
         """
-        Probability density.
+        Posterior probability density.
+
+        Parameters
+        ----------
+        l0 : array_like
+           Vector of parameters :math:`l_0` at which to evaluate the posterior
+           distribution.
+        l1 : array_like
+           Vector of parameters :math:`l_1` at which to evaluate the posterior
+           distribution.
+
+        Returns
+        -------
+        density : array_like
+           NumPy array of the posterior density evaluated at :python:`l0`
+           and :python:`l1`.
         """
         ld = self.log_density(l0, l1)
         return np.exp(ld, out=ld)
@@ -46,7 +72,22 @@ class Posterior:
 
     def log_density(self, l0: Vector, l1: Vector) -> np.ndarray:
         """
-        Logarithm of the probability density.
+        Logarithm of the posterior probability density.
+
+        Parameters
+        ----------
+        l0 : array_like
+           Vector of parameters :math:`l_0` at which to evaluate the posterior
+           distribution.
+        l1 : array_like
+           Vector of parameters :math:`l_1` at which to evaluate the posterior
+           distribution.
+
+        Returns
+        -------
+        density : array_like
+           NumPy array of the logarithm of the posterior density evaluated at
+           :python:`l0` and :python:`l1`.
         """
         l0,l1 = np.broadcast_arrays(l0, l1)
         shape = l0.shape
@@ -58,7 +99,18 @@ class Posterior:
 
     def mean_pdf(self, mu: Vector) -> np.ndarray:
         """
-        Density of the distribution mean.
+        Posterior density of the distribution mean :math:`\\mu`.
+
+        Parameters
+        ----------
+        mu : array_like
+           Vector of the distribution mean :math:`\\mu` at which to evaluate
+           its posterior distribution.
+
+        Returns
+        -------
+        pdf : array_like
+           NumPy array of the posterior density evaluated at :python:`mu`.
         """
         lmd = self.log_mean_pdf(mu)
         return np.exp(lmd, out=lmd)
@@ -66,7 +118,20 @@ class Posterior:
 
     def log_mean_pdf(self, mu: Vector) -> np.ndarray:
         """
-        Logarithm of the density of the distribution mean.
+        Logarithm of the posterior density of the distribution mean
+        :math:`\\mu`.
+
+        Parameters
+        ----------
+        mu : array_like
+           Vector of the distribution mean :math:`\\mu` at which to evaluate
+           its posterior distribution.
+
+        Returns
+        -------
+        log_pdf : array_like
+           NumPy array of the logarithm of the posterior density evaluated at
+           :python:`mu`.
         """
         mu = np.array(mu, copy=False, order='C')
         shape = mu.shape
@@ -76,7 +141,19 @@ class Posterior:
 
     def predictive_pdf(self, x: Vector) -> np.ndarray:
         """
-        Predictive density.
+        Posterior predictive density.
+
+        Parameters
+        ----------
+        x : array_like
+           Vector of :math:`x` at which to evaluate the posterior
+           predictive distribution.
+
+        Returns
+        -------
+        pdf : array_like
+           NumPy array of the posterior predictive density evaluated at
+           :python:`x`.
         """
         lpdf = self.log_predictive_pdf(x)
         return np.exp(lpdf, out=lpdf)
@@ -84,7 +161,19 @@ class Posterior:
 
     def log_predictive_pdf(self, x: Vector) -> np.ndarray:
         """
-        Logarithm of the predictive density.
+        Logarithm of the posterior predictive density.
+
+        Parameters
+        ----------
+        x : array_like
+           Vector of :math:`x` at which to evaluate the posterior
+           predictive distribution.
+
+        Returns
+        -------
+        pdf : array_like
+           NumPy array of the logarithm of the posterior predictive density
+           evaluated at :python:`x`.
         """
         x = np.array(x, copy=False, order='C')
         shape = x.shape
@@ -94,7 +183,19 @@ class Posterior:
 
     def predictive_cdf(self, x: Vector) -> np.ndarray:
         """
-        Predictive cumulative distribution function.
+        Posterior predictive cumulative distribution function.
+
+        Parameters
+        ----------
+        x : array_like
+           Vector of :math:`x` at which to evaluate the posterior
+           predictive distribution.
+
+        Returns
+        -------
+        cdf : array_like
+           NumPy array of the cumulative posterior predictive distribution
+           evaluated at :python:`x`.
         """
         x = np.array(x, copy=False, order='C')
         shape = x.shape
@@ -104,8 +205,20 @@ class Posterior:
 
     def predictive_ccdf(self, x: Vector) -> np.ndarray:
         """
-        Predictive complementary distribution function (or survivor
+        Posterior predictive complementary distribution function (or survivor
         function).
+
+        Parameters
+        ----------
+        x : array_like
+           Vector of :math:`x` at which to evaluate the posterior
+           predictive distribution.
+
+        Returns
+        -------
+        ccdf : array_like
+           NumPy array of the complementary cumulative posterior predictive
+           distribution evaluated at :python:`x`.
         """
         x = np.array(x, copy=False, order='C')
         shape = x.shape
@@ -115,7 +228,19 @@ class Posterior:
 
     def predictive_quantiles(self, q: Vector) -> np.ndarray:
         """
-        Quantiles of the predictive distribution.
+        Quantiles of the posterior predictive distribution.
+
+        Parameters
+        ----------
+        q : array_like
+           Vector of quantiles :math:`q` of the posterior predictive
+           distribution to compute.
+
+        Returns
+        -------
+        x : array_like
+           NumPy array of the arguments :math:`x` of the posterior predictive
+           distribution corresponding to the quantiles :math:`q`.
         """
         q = np.array(q, copy=False, order='C')
         shape = q.shape
@@ -125,8 +250,20 @@ class Posterior:
 
     def predictive_tail_quantiles(self, q: Vector) -> np.ndarray:
         """
-        Tail quantiles of the predictive distribution (or quantiles
-        of the complementary predictive distribution).
+        Tail quantiles of the posterior predictive distribution (or quantiles
+        of the complementary posterior predictive distribution).
+
+        Parameters
+        ----------
+        q : array_like
+           Vector of quantiles :math:`q` of the complementary cumulative
+           posterior predictive distribution to compute.
+
+        Returns
+        -------
+        x : array_like
+           NumPy array of the arguments :math:`x` of the posterior predictive
+           distribution corresponding to the quantiles :math:`1-q`.
         """
         q = np.array(q, copy=False, order='C')
         shape = q.shape
