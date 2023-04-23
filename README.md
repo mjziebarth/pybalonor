@@ -29,7 +29,7 @@ The following software is required to install pybalonor:
 - The Meson build system
 - Cython
 - NumPy
-- [Mebuex](https://github.com/mjziebarth/Mebuex)
+- Mebuex
 
 The Python package can be built from the repository's root directory using
 the setuptools build system. For instance, you may call the following command
