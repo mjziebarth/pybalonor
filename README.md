@@ -25,7 +25,7 @@ Python solution, or working with a large data set, go ahead!
 ## Installation and Requirements
 The following software is required to install pybalonor:
 - A modern C++ compiler
-- Boost Math
+- Boost Math (v1.80.0 or later recommended for numerical stability)
 - The Meson build system
 - Cython
 - NumPy
