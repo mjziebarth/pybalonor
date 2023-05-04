@@ -13,6 +13,24 @@ dependencies = [
     "numpy",
     "cython"
 ]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Cython",
+    "Programming Language :: C++",
+    "License :: OSI Approved :: European Union Public Licence 1.2 (EUPL 1.2)",
+    "Intended Audience :: Science/Research",
+    "Natural Language :: English",
+    "Operating System :: POSIX :: Linux",
+    "Topic :: Scientific/Engineering :: Mathematics"
+]
+readme = "README.md"
+license = {file="LICENSE"}
+
+[project.urls]
+"Homepage" = "https://github.com/mjziebarth/pybalonor"
+"Bug Tracker" = "https://github.com/mjziebarth/pybalonor/issues"
+"Documentation" = "https://mjziebarth.github.io/pybalonor/index.html"
 
 [tool.setuptools]
 packages = ["pybalonor", "pybalonor.prior"]
