@@ -1,0 +1,5 @@
+# Just to include the meson.build file
+include meson.build
+include include/*
+include src/*
+include pybalonor/*.pyx
