@@ -77,6 +77,14 @@ Note: dbuf1 refers to a C-contiguous buffer of doubles (e.g. a one-dimensional N
 
 For more information, visit the [pybalonor documentation](https://mjziebarth.github.io/pybalonor/).
 
+## Citation
+If you use pybalonor for scientific work, you may cite the specific version on
+Zenodo:
+
+> Ziebarth, Malte Jörn. (2023). pybalonor: A package for the Bayesian analysis
+of the log-normal distribution in Python. (1.0.0). Zenodo.
+https://doi.org/10.5281/zenodo.7896869
+
 ## License
 This software is licensed under the European Public License (EUPL) version 1.2
 or later (`EUPL-1.2`). See the LICENSE file in this directory.
