@@ -37,7 +37,7 @@ jobs:
           # https://github.com/pypa/setuptools/issues/3269#issuecomment-1104943440
           pip install --upgrade --user pip
           sudo apt purge python3-setuptools
-          env DEB_PYTHON_INSTALL_LAYOUT=deb_system
+          pip install --upgrade --user pip
           pip install --user .
     - name: Build HTML v2
       run: |
