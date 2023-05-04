@@ -74,3 +74,15 @@ The parameters are as follows:
 | `l1_max`  | float | Maximum of log-variance parameter.                                     |
 
 Note: dbuf1 refers to a C-contiguous buffer of doubles (e.g. a one-dimensional NumPy array).
+
+## License
+This software is licensed under the European Public License (EUPL) version 1.2
+or later (`EUPL-1.2`). See the LICENSE file in this directory.
+
+## Changelog
+The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
+and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+
+### [1.0.0] - 2023-05-04
+#### Added
+- Initial release.
