@@ -75,6 +75,8 @@ The parameters are as follows:
 
 Note: dbuf1 refers to a C-contiguous buffer of doubles (e.g. a one-dimensional NumPy array).
 
+For more information, visit the [pybalonor documentation](https://mjziebarth.github.io/pybalonor/).
+
 ## License
 This software is licensed under the European Public License (EUPL) version 1.2
 or later (`EUPL-1.2`). See the LICENSE file in this directory.
