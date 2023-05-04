@@ -34,7 +34,9 @@ jobs:
           sudo update-alternatives --install /usr/bin/g++ g++ /usr/bin/g++-10 10
           sudo pip install matplotlib pyproj meson scipy mebuex
           # Fix a weird bug on Ubuntu 22.04 that leads to package UNKNOWN:
-          # https://github.com/pypa/setuptools/issues/3269#issuecomment-1254507377
+          # https://github.com/pypa/setuptools/issues/3269#issuecomment-1104943440
+          sudo python -m ensurepip --upgrade
+          sudo apt purge python3-setuptools
           env DEB_PYTHON_INSTALL_LAYOUT=deb_system
           pip install --user .
     - name: Build HTML v2
